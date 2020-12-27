@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+</head>
+
+<body>
+    <div id="dom1">雪儿忍不住笑了
+        <input type="button" value="克隆" onclick="clone()">
+    </div>
+
+</body>
+<script>
+    function clone() {
+        const dom = document.getElementById("dom1")
+
+        // 创建Range
+        const range = document.createRange()
+
+        // 包含元素
+        range.selectNodeContents(dom)
+
+        // 克隆内容
+        const newDom = range.cloneContents()
+        dom.appendChild(newDom)
+    }
+</script>
+
+</html>
