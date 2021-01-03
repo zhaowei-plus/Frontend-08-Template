@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>地图编辑器</title>
+    <style>
+        #container {
+            margin: 10px auto;
+            display: flex;
+            align-content: flex-start;
+            justify-content: flex-start;
+            width: 701px;
+            flex-wrap: wrap;
+        }
+        
+        .cell {
+            width: 6px;
+            height: 6px;
+            background-color: gray;
+            border-bottom: 1px solid white;
+            border-right: 1px solid white;
+        }
+    </style>
+</head>
+
+<body>
+
+</body>
+<div id="container"></div>
+<button onclick="handleSave()">保存</button>
+<script>
+    // 实现排序的数据
+    // winner Tree
+    // head 
+    // 二叉树/二叉堆/满二叉树
+
+    // 1使用一维数组来保存地图数据
+    const MAP_SIZE = 100
+
+    // 加载地图数据
+    const loadMap = () => {
+        if (localStorage['map']) {
+            return JSON.parse(localStorage['map'])
+        }
+        return Array(MAP_SIZE * MAP_SIZE).fill(0)
+    }
+
+    // 0 表示空 1 表示不可用
+    let map = loadMap()
+
+    const container = document.getElementById('container')
+    async function drawMap() {
+        let mousedown = false
+        let clear = false
+
+        for (let j = 0; j < MAP_SIZE; j++) {
+            for (let i = 0; i < MAP_SIZE; i++) {
+                let cell = document.createElement('div')
+                cell.classList.add('cell')
+
+                if (map[j * MAP_SIZE + i] === 1) {
+                    cell.style.backgroundColor = 'black'
+                }
+
+                cell.addEventListener('mousemove', () => {
+                        if (mousedown) {
+                            if (clear) {
+                                map[j * MAP_SIZE + i] = 0
+                                cell.style.backgroundColor = ''
+                            } else {
+                                map[j * MAP_SIZE + i] = 1
+                                cell.style.backgroundColor = 'black'
+                            }
+                        }
+                    })
+                    // await sleep(20)
+                container.appendChild(cell)
+            }
+        }
+
+        // 添加鼠标事件
+        container.addEventListener('mousedown', e => {
+            mousedown = true
+
+            // 鼠标右键表示清除
+            clear = (e.which === 3)
+        })
+        container.addEventListener('mouseup', () => {
+            mousedown = false
+        })
+
+        // 阻止鼠标右键默认行为
+        container.addEventListener('contextmenu', e => e.preventDefault())
+    }
+
+    const handleSave = () => {
+        localStorage.setItem('map', JSON.stringify(map))
+    }
+
+    // 利用async/await 实现可视化，用于调试
+    const sleep = (time) => {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                resolve()
+            }, time)
+        })
+    }
+
+    const findPath = async(map, start, end) => {
+        const table = Object.create(map)
+        const queue = [start] // 换成 stack 可以改成深度优先搜索
+
+        // container.childNodes[start[1] * MAP_SIZE + start[0]].style.backgroundColor = 'blue'
+        // container.childNodes[end[1] * MAP_SIZE + end[0]].style.backgroundColor = 'lightgreen'
+
+
+        const insert = async(x, y, pre) => {
+            if (x < 0 || x >= MAP_SIZE || y < 0 || y >= MAP_SIZE) {
+                return;
+            }
+
+            // 跳过已经搜索的点
+            if (table[y * MAP_SIZE + x]) {
+                return;
+            }
+
+            // 添加可视化调试
+            // await sleep(20)
+            container.childNodes[y * MAP_SIZE + x].style.backgroundColor = 'lightgreen'
+            table[y * MAP_SIZE + x] = pre
+
+            // 标记节点，表示搜索过程
+            // map[y * MAP_SIZE + x] = 2
+            queue.push([x, y])
+        }
+
+        while (queue.length) {
+            let [x, y] = queue.shift()
+
+            // 到达目的节点
+            if (x === end[0] && y === end[1]) {
+                const path = []
+
+                // 从终点项起点查找，根据 pre 信息找到路径
+                while (x !== start[0] || y !== start[1]) {
+                    path.push(map[y * MAP_SIZE + x]);
+                    [x, y] = table[y * MAP_SIZE + x];
+                    await sleep(20);
+                    container.childNodes[y * MAP_SIZE + x].style.backgroundColor = 'purple';
+                }
+                return path;
+            }
+
+            // 搜索四周（上、下、左、右）节点
+            await insert(x - 1, y, [x, y])
+            await insert(x, y - 1, [x, y])
+            await insert(x + 1, y, [x, y])
+            await insert(x, y + 1, [x, y])
+
+            // 搜索斜脚
+            await insert(x - 1, y - 1, [x, y])
+            await insert(x + 1, y - 1, [x, y])
+            await insert(x - 1, y + 1, [x, y])
+            await insert(x + 1, y + 1, [x, y])
+        }
+        return false
+    }
+
+
+    drawMap()
+</script>
+
+</html>
