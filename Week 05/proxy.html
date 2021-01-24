@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Vue reactive的实现原理</title>
+</head>
+
+<body>
+    <script>
+        const callbacks = new Map() // 收集依赖信息
+        const reactives = new Map() // Proxy对象集合
+        let usedReactives = []
+
+        const obj = {
+            a: {
+                b: '张三'
+            },
+            b: '李四'
+        }
+
+
+        let po = reactive(obj)
+
+        // TODO 考虑解除监听的方式
+        // TODO 保证边缘形况，可以参考Vue3 reactive的源代码
+
+        function reactive(object) {
+            // 注意：这里每次否会返回一个新的 Proxy，当在重复监听的proxy不是同一个proxy
+            // 不存储任何状态，所以需要手动缓存
+            if (reactives.has(object)) {
+                return reactives.get(object)
+            }
+
+            const proxy = new Proxy(object, {
+                set(obj, prop, value) {
+                    obj[prop] = value
+
+                    if (callbacks.get(obj)) {
+                        if (callbacks.get(obj).get(prop)) {
+                            for (let callback of callbacks.get(obj).get(prop)) {
+                                callback()
+                            }
+                        }
+                    }
+                    return obj[prop]
+                },
+                get(obj, prop) {
+                    // 注册收集依赖关系
+                    usedReactives.push([obj, prop])
+                    if (typeof obj[prop] === 'object') {
+                        return reactive(obj[prop])
+                    }
+                    return obj[prop]
+                }
+            })
+
+            reactives.set(object, proxy)
+            return proxy
+        }
+
+        function effect(callback) {
+            usedReactives = []
+            callback()
+            console.log('usedReactives:', usedReactives)
+
+            for (let reactivity of usedReactives) {
+                // 避免多次注册
+                if (!callbacks.has(reactivity[0])) {
+                    callbacks.set(reactivity[0], new Map())
+                }
+                if (!callbacks.get(reactivity[0]).has(reactivity[1])) {
+                    callbacks.get(reactivity[0]).set(reactivity[1], [])
+                }
+                callbacks.get(reactivity[0]).get(reactivity[1]).push(callback)
+            }
+        }
+
+        effect(() => {
+            console.log(po.a.b)
+        })
+    </script>
+</body>
+
+</html>

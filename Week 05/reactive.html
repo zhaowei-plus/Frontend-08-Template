@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Vue reactive双向数据绑定</title>
+    <style>
+        .color-picker {
+            width: 500px;
+            height: 500px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            flex-direction: column;
+        }
+        
+        .color-picker--bar {
+            width: 100%;
+            height: 39px;
+            line-height: 39px;
+            display: flex;
+            justify-content: space-between;
+        }
+        
+        .color-picker--view {
+            width: 100%;
+            flex: 1;
+            height: 300px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="color-picker">
+        <div class="color-picker--bar">
+            <input id="r" type="range" min=0 m=255>
+            <input id="g" type="range" min=0 m=255>
+            <input id="b" type="range" min=0 m=255>
+        </div>
+        <div class="color-picker--view">
+
+        </div>
+    </div>
+
+    <script>
+        const obj = {
+            r: 1,
+            g: 1,
+            b: 1
+        }
+
+        let po = reactive(obj)
+
+        const callbacks = new Map()
+        let usedReactives = []
+
+        function reactive(object) {
+            return new Proxy(object, {
+                set(obj, prop, value) {
+                    obj[prop] = value
+
+                    if (callbacks.get(obj)) {
+                        if (callbacks.get(obj).get(prop)) {
+                            for (let callback of callbacks.get(obj).get(prop)) {
+                                callback()
+                            }
+                        }
+                    }
+                    return obj[prop]
+                },
+                get(obj, prop) {
+                    // 注册收集依赖关系
+                    usedReactives.push([obj, prop])
+                    return obj[prop]
+                }
+            })
+        }
+
+        function effect(callback) {
+            usedReactives = []
+            callback()
+            console.log('usedReactives:', usedReactives)
+
+            for (let reactivity of usedReactives) {
+                // 避免多次注册
+                if (!callbacks.has(reactivity[0])) {
+                    callbacks.set(reactivity[0], new Map())
+                }
+                if (!callbacks.get(reactivity[0]).has(reactivity[1])) {
+                    callbacks.get(reactivity[0]).set(reactivity[1], [])
+                }
+                callbacks.get(reactivity[0]).get(reactivity[1]).push(callback)
+            }
+        }
+
+        effect(() => {
+            document.getElementById('r').value = po.r
+        })
+        effect(() => {
+            document.getElementById('g').value = po.g
+        })
+        effect(() => {
+            document.getElementById('b').value = po.b
+        })
+
+
+        document.getElementById('r').addEventListener('input', event => po.r = event.target.value)
+        document.getElementById('g').addEventListener('input', event => po.g = event.target.value)
+        document.getElementById('b').addEventListener('input', event => po.b = event.target.value)
+
+        effect(() => {
+            document.querySelector('.color-picker--view').style.backgroundColor = `rgb(${po.r}, ${po.g}, ${po.b})`
+        })
+    </script>
+</body>
+
+</html>
