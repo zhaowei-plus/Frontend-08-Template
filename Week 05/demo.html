@@ -1,0 +1,453 @@
+<style>
+    html,
+    body {
+        margin: 0;
+        padding: 0;
+    }
+    
+    .coord-axis {
+        position: fixed;
+        z-index: 9999;
+        left: 0;
+        top: 0;
+    }
+    
+    .coord-axis-x {
+        border-right: 1px dashed black;
+        bottom: 0;
+    }
+    
+    .coord-axis-y {
+        border-bottom: 1px dashed black;
+        right: 0;
+    }
+    
+    .hide {
+        display: none !important;
+    }
+    
+    .transit {
+        opacity: 0.2;
+    }
+    
+    .mirror {
+        position: fixed;
+        margin: 0 !important;
+        box-sizing: border-box;
+        user-select: none;
+        z-index: 10000;
+        opacity: 0.8;
+        /* transform: translate(-50%, -50%); */
+    }
+</style>
+
+<style>
+    .source {
+        float: left;
+        width: 350px;
+        height: 100vh;
+        background-color: #f7f8fa;
+    }
+    
+    .target {
+        box-sizing: border-box;
+        margin-left: 350px;
+        width: 500px;
+        height: 100vh;
+        border: 1px solid #aaa;
+    }
+    
+    .block {
+        min-height: 100px;
+        overflow: hidden;
+        margin: 10px 20px;
+        border: 1px solid #aaa;
+        box-shadow: #ebedf0 0 4px 12px;
+    }
+    
+    .box {
+        display: flex;
+        color: #fff;
+        margin: 10px;
+        padding: 20px;
+        height: 50px;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .box.red {
+        background-color: #F56C6C;
+    }
+    
+    .box.green {
+        background-color: #67C23A;
+    }
+    
+    .box.blue {
+        background-color: #409EFF;
+    }
+    
+    .box.yellow {
+        background-color: #E6A23C;
+    }
+</style>
+
+<div id="app">
+    <div class="source">
+        <div class="box red" grabable></div>
+        <div class="box green" grabable></div>
+        <div class="box blue" grabable></div>
+        <div class="box yellow" grabable></div>
+    </div>
+    <div class="target">
+        <div class="block"></div>
+        <div style="display: flex;">
+            <div class="block" style="flex: 1"></div>
+            <div class="block" style="flex: 1"></div>
+        </div>
+        <div class="block"></div>
+        <div style="display: flex;">
+            <div class="block" style="flex: 1"></div>
+            <div class="block" style="flex: 1"></div>
+        </div>
+        <div class="block"></div>
+    </div>
+</div>
+
+<div id="axisX" class="coord-axis coord-axis-x hide" style="border-right-color: red;"></div>
+<div id="axisY" class="coord-axis coord-axis-y hide" style="border-bottom-color: red;"></div>
+<div id="refX" class="coord-axis coord-axis-x hide" style="border-right-color: green;"></div>
+<div id="refY" class="coord-axis coord-axis-y hide" style="border-bottom-color: green;"></div>
+<div id="itemX" class="coord-axis coord-axis-x hide" style="border-right-color: blue"></div>
+<div id="itemY" class="coord-axis coord-axis-y hide" style="border-bottom-color: blue"></div>
+<svg id="shape" viewBox="0 0 0 0" style="display: none; background: rgba(0, 255, 0, 0.5); position: fixed;" xmlns="http://www.w3.org/2000/svg">
+    <line id="line" x1="0" y1="0" x2="0" y2="0" style="stroke:rgb(0, 0, 0); stroke-width: 1; stroke-dasharray: 4"/>
+  </svg>
+
+<script>
+    const _global = {}
+
+    function addClass(el, className) {
+        var current = el.className;
+        if (!current.length) {
+            el.className = className;
+        } else if (!current.includes(className)) {
+            el.className += ' ' + className;
+        }
+    }
+
+    function rmClass(el, className) {
+        el.className = el.className.replace(className, ' ').trim();
+    }
+
+    function emitter() {
+        let events = {}
+        return {
+            on(type, fn) {
+                events[type] = events[type] || []
+                if (!events[type].includes(fn)) {
+                    events[type].push(fn)
+                }
+            },
+            off(type, fn) {
+                if (events[type] && events[type].includes(fn)) {
+                    events[type].splice(events[type].indexOf(fn), 1)
+                }
+            },
+            emit() {
+                let type = arguments[0]
+                let args = Array.prototype.slice.call(arguments, 1)
+                if (events[type]) {
+                    events[type].forEach(fn => {
+                        fn.apply(this, args)
+                    })
+                }
+            },
+        }
+    }
+
+    let em = emitter()
+    let context = Object.create(null)
+
+    function isGrabable(el) {
+        return el.hasAttribute('grabable')
+    }
+
+    function grab(e) {
+        if (!isGrabable(e.target)) {
+            return
+        }
+        e.preventDefault()
+        if (e.shiftKey) {
+            return reset(e)
+        }
+        document.documentElement.addEventListener('mousemove', drag)
+        let {
+            clientX: x,
+            clientY: y
+        } = e
+        context.item = e.target
+        context.mirror = e.target.cloneNode(true)
+        context.graped = true
+        em.emit('grab', x, y, context, e)
+    }
+
+    function drag(e) {
+        if (!context.graped) {
+            return
+        }
+        e.preventDefault()
+        let {
+            clientX: x,
+            clientY: y
+        } = e
+        em.emit('drag', x, y, context, e)
+    }
+
+    function drop(e) {
+        if (!context.graped) {
+            return
+        }
+        context.graped = false
+        document.documentElement.removeEventListener('mousemove', drag)
+        let {
+            clientX: x,
+            clientY: y
+        } = e
+        em.emit('drop', x, y, context, e)
+    }
+
+    function reset(e) {
+        em.emit('reset', e)
+    }
+    document.documentElement.addEventListener('mousedown', grab)
+    document.documentElement.addEventListener('mouseup', drop)
+
+    // 坐标轴
+    {
+        em.on('grab', moveAxis)
+        em.on('grab', showAxis)
+        em.on('drag', moveAxis)
+        em.on('drop', hideAxis)
+
+        function moveAxis(x, y) {
+            axisX.style.left = `${x}px`
+            axisY.style.top = `${y}px`
+        }
+
+        function showAxis() {
+            rmClass(axisX, 'hide')
+            rmClass(axisY, 'hide')
+        }
+
+        function hideAxis() {
+            addClass(axisX, 'hide')
+            addClass(axisY, 'hide')
+        }
+    }
+
+    // 参考点
+    {
+        em.on('grab', moveRef)
+        em.on('grab', showRef)
+        em.on('drag', moveRef)
+        em.on('drop', hideRef)
+
+        function moveRef() {
+            refTrack.apply(this, arguments)
+        }
+
+        function showRef(x, y, {
+            item
+        }) {
+            let rect = item.getBoundingClientRect()
+
+            refX.style.left = `${x}px`
+            refY.style.top = `${y}px`
+            itemX.style.left = `${rect.x}px`
+            itemY.style.top = `${rect.y}px`
+
+            refStart.apply(this, arguments)
+            refTrack.apply(this, arguments)
+            rmClass(refX, 'hide')
+            rmClass(refY, 'hide')
+            rmClass(itemX, 'hide')
+            rmClass(itemY, 'hide')
+            shape.style.display = 'block'
+        }
+
+        function hideRef() {
+            addClass(refX, 'hide')
+            addClass(refY, 'hide')
+            addClass(itemX, 'hide')
+            addClass(itemY, 'hide')
+            shape.style.display = 'none'
+        }
+
+        let refPoint = {
+            x: 0,
+            y: 0
+        }
+
+        function refStart(x, y, context) {
+            refPoint.x = x
+            refPoint.y = y
+            context.origin = {
+                x,
+                y
+            }
+        }
+
+        function refTrack(x, y, context) {
+            let {
+                x: ox,
+                y: oy
+            } = refPoint
+            let vector = [x - ox, y - oy]
+            let width = Math.abs(x - ox)
+            let height = Math.abs(y - oy)
+            shape.setAttribute('viewBox', `0 0 ${width} ${height}`)
+            shape.style.width = `${width}px`
+            shape.style.height = `${height}px`
+            if (x >= ox && y >= oy) {
+                shape.style.left = `${ox}px`
+                shape.style.top = `${oy}px`
+
+                line.setAttribute('x1', 0)
+                line.setAttribute('y1', 0)
+                line.setAttribute('x2', x - ox)
+                line.setAttribute('y2', y - oy)
+
+                em.emit('track', {
+                    x1: ox,
+                    y1: oy,
+                    x2: x,
+                    y2: y
+                }, vector, context)
+            } else if (x >= ox && y < oy) {
+                shape.style.left = `${ox}px`
+                shape.style.top = `${y}px`
+
+                line.setAttribute('x1', 0)
+                line.setAttribute('y1', oy - y)
+                line.setAttribute('x2', x - ox)
+                line.setAttribute('y2', 0)
+
+                em.emit('track', {
+                    x1: ox,
+                    y1: y,
+                    x2: x,
+                    y2: oy
+                }, vector, context)
+            } else if (x < ox && y < oy) {
+                shape.style.left = `${x}px`
+                shape.style.top = `${y}px`
+
+                line.setAttribute('x1', ox - x)
+                line.setAttribute('y1', oy - y)
+                line.setAttribute('x2', 0)
+                line.setAttribute('y2', 0)
+
+                em.emit('track', {
+                    x1: x,
+                    y1: y,
+                    x2: ox,
+                    y2: oy
+                }, vector, context)
+            } else if (x < ox && y >= oy) {
+                shape.style.left = `${x}px`
+                shape.style.top = `${oy}px`
+
+                line.setAttribute('x1', ox - x)
+                line.setAttribute('y1', 0)
+                line.setAttribute('x2', 0)
+                line.setAttribute('y2', y - oy)
+
+                em.emit('track', {
+                    x1: x,
+                    y1: oy,
+                    x2: ox,
+                    y2: y
+                }, vector, context)
+            }
+            em.emit('trackRect', {
+                x: Math.min(x, ox),
+                y: Math.min(y, oy),
+                width,
+                height
+            }, vector, context)
+        }
+    }
+
+    // isDroppable
+    {
+        em.on('drop', (x, y, context, e) => {
+            let mirror = context.mirror
+            let item = context.item
+            let className = mirror.className || ''
+            mirror.className += ' hide'
+            let elBehindPoint = document.elementFromPoint(x, y)
+            let insertItem = item.cloneNode(true)
+            rmClass(insertItem, 'transit')
+            insertItem.removeAttribute('grabable')
+            insertInto(elBehindPoint, insertItem)
+            mirror.className = className
+        })
+
+        function insertInto(point, item) {
+            if (point.className.includes('block')) {
+                point.appendChild(item)
+            } else {
+                let parent
+                let ref = point
+                do {
+                    parent = ref.parentNode
+                    if (parent.className.includes('block')) {
+                        // parent.insertBefore(item, ref)
+                        ref.insertAdjacentElement('afterend', item)
+                        break
+                    } else {
+                        ref = parent
+                    }
+                } while (parent && (parent !== document.body))
+            }
+        }
+    }
+
+    // cloned mirror
+    {
+        em.on('grab', function(x, y, {
+            item,
+            mirror
+        }, e) {
+            let {
+                width,
+                height
+            } = item.getBoundingClientRect()
+            console.log(item.offsetWidth, item.offsetHeight)
+            mirror.style.width = `${width}px`
+            mirror.style.height = `${height}px`
+            mirror.style.top = `${y}px`
+            mirror.style.left = `${x}px`
+            mirror.style.transform = `translate(${-e.offsetX}px, ${-e.offsetY}px)`
+            addClass(mirror, 'mirror')
+            addClass(item, 'transit')
+            document.documentElement.appendChild(mirror)
+        })
+
+        em.on('drag', (x, y, {
+            mirror
+        }) => {
+            mirror.style.top = `${y}px`
+            mirror.style.left = `${x}px`
+        })
+
+        em.on('drop', function(x, y, {
+            item,
+            mirror
+        }) {
+            rmClass(item, 'transit')
+            document.documentElement.removeChild(mirror)
+        })
+    }
+</script>
